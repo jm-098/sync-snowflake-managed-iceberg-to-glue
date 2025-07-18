@@ -104,6 +104,12 @@ $$
 ;
 
 -- this procedure is used to recreate the table in Athena if it does not exist or if the schema is different
+-- it expects the table definition in Snowflake format from get_ddl function
+-- sample call to run the procedure: 
+--    call recreate_table_in_athena_poc('my_athena-db',   'my_athena_table', 
+--          get_ddl('table', 'my_snow_db.my_snow_schema.my_snow_iceberg_table'),
+ --         REGEXP_SUBSTR(CAST(GET(PARSE_JSON(SYSTEM$GET_ICEBERG_TABLE_INFORMATION('my_snow_iceberg_table')), 'metadataLocation') AS VARCHAR), 's3://[^/]+/[^/]+/[^/]+/TESTSC/')  
+--          );           
 -- it creates table in Athena if it does not exist or if the schema is different
 -- it drops and recreates the table if the table structure is different (to be enhanced)
 --  Notes for the function: compare_schema, which compares the structure of an Athena table with a Snowflake-managed table.
@@ -113,12 +119,12 @@ $$
 ---- No timezone conversions are applied during the column type transformation.
 
 
-CREATE OR REPLACE PROCEDURE recreate_table_in_athena_poc(database_name string, table_name string, output_location string, table_def string)
+CREATE OR REPLACE PROCEDURE recreate_table_in_athena_poc(database_name string, table_name string, table_def string, output_location string)
 RETURNS STRING
 LANGUAGE PYTHON
 RUNTIME_VERSION = 3.11
 HANDLER = 'check_and_create_table'
-EXTERNAL_ACCESS_INTEGRATIONS = (aws_glue_externaws_glue_access_int_with_tokenal_id_int)
+EXTERNAL_ACCESS_INTEGRATIONS = (aws_glue_access_int_with_token)
 PACKAGES = ('boto3','botocore', 'snowflake-snowpark-python')
 SECRETS = ('cred' = aws_glue_creds_secret_token)
 AS
@@ -183,11 +189,7 @@ def columns_to_string(existing_columns):
         for col in existing_columns
     ])
 
-# This function, compare_schema, compares the structure of an Athena table with a Snowflake-managed table.
-# It primarily identifies columns that have been added or dropped between the two tables.
-# Column order is ignored in the comparison; differences in column order will be considered as changes.
-# For column types, all Snowflake timestamp_* columns are converted to the 'timestamp' type in Athena.
-# Note: No timezone conversions are applied during the column type transformation.
+
 def compare_schema (database_name, table_name , column_list_str ):
     try:
         response = glue_client.get_table(

@@ -36,7 +36,11 @@ CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION aws_glue_access_int
 -- OPTION 2: Create a security integration to allow access to AWS Glue using an AWS application ID
 -- additional notes on usign aws application id access
 -- create securty integration to allow access to aws application id
+-- related documentation: 
 
+-- follow AWS documentation to create an IAM role: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create.html
+-- add permissions for glue: https://docs.aws.amazon.com/glue/latest/dg/set-up-iam.html
+-- https://docs.aws.amazon.com/athena/latest/ug/security-iam-athena.html
 
 CREATE OR REPLACE SECURITY INTEGRATION aws_glue_security_integration
   TYPE = API_AUTHENTICATION
@@ -47,7 +51,9 @@ CREATE OR REPLACE SECURITY INTEGRATION aws_glue_security_integration
 -- execute the following SQL statement to get the STORAGE_AWS_IAM_USER_ARN and STORAGE_AWS_EXTERNAL_ID values for the IAM user:
 DESC SECURITY INTEGRATION aws_glue_security_integration;
 
--- using the STORAGE_AWS_IAM_USER_ARN and STORAGE_AWS_EXTERNAL_ID values, follow Step 5 in Option 1: Configuring a Snowflake storage integration to access Amazon S3 to grant the IAM user access to the Amazon S3 service.
+-- using the STORAGE_AWS_IAM_USER_ARN and STORAGE_AWS_EXTERNAL_ID values, 
+-- follow Step 5 in Option 1: Configuring a Snowflake storage integration to access Amazon S3 to grant the IAM user access to the Amazon S3 service:
+-- https://docs.snowflake.com/en/user-guide/data-load-s3-config-storage-integration
 
 -- create a token to use for authentication with the AWS S3 service
 CREATE OR REPLACE SECRET aws_glue_creds_secret_token
