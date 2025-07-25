@@ -4,6 +4,14 @@ Description: This script sets up a secret and external access integration to all
              It provides two options for authentication with AWS: using access tokens or application-based authentication.
              Choose one of these methods based on your needs and security requirements.
 ===============================================
+ Change History
+===============================================
+ Date        | Author        | Description
+-------------|---------------|------------------------------------------------------
+2025-06-18   | J. Hughes     | Created
+2025-07-10   | J. Ma         | Added option for AWS application ID authentication
+2025-07-25   | J. Ma         | Updated sample policy for Glue access
+===============================================
 */
 
 
@@ -59,6 +67,7 @@ CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION aws_glue_access_int
 			],
 			"Resource": [
 				"arn:aws:glue:us-west-2:087354435437:catalog",
+        "arn:aws:glue:us-west-2:087354435437:catalog/*",
 				"arn:aws:glue:us-west-2:087354435437:table/<my athena database>/*",
 				"arn:aws:glue:us-west-2:087354435437:database/<my athena database>"
 			]

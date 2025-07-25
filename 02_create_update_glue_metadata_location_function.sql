@@ -3,6 +3,7 @@ Procedure: update_glue_metadata_location_poc
 Description:  These procedures update the metadata location of an Iceberg table in AWS Glue
               to create the procedure, replace aws_glue_access_int_with_token with your own external access integration
               and aws_glue_creds_secret_token with your own secret token 
+              replace us-west-2 with your own region
 
  Sample Call:
  -----------------------------------------------
@@ -51,6 +52,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 import logging
 from datetime import datetime
+import re
 
 
 logger = logging.getLogger("python_logger")
@@ -220,12 +222,12 @@ Description: This procedure creates a table in AWS Glue if it does not exist or 
          It expects the table definition in Snowflake format from get_ddl function
          To create the procedure, replace aws_glue_access_int_with_token with your own external access integration
               and aws_glue_creds_secret_token with your own secret token    
-         For glue table output location, replace 'TESTSC' with your own S3 bucket subfolder name
+         replace us-west-2 with your own region
 
  Sample Call:
  -----------------------------------------------
  -- Create glue-athena table if it does not exist: 
- CALL recreate_table_in_glue_poc(
+ CALL create_table_in_glue_poc(
      'my_athena_db',   
      'my_athena_table', 
      get_ddl('table', 'my_snow_db.my_snow_schema.my_snow_iceberg_table'),
@@ -241,12 +243,13 @@ Description: This procedure creates a table in AWS Glue if it does not exist or 
 2025-07-24   | J. Ma         | update create procedure to use glue client to create table.  minimize permissions needed on aws side. 
              |               | added function to convert Snowflake column types to glue compatible types
              |               | No timezone conversions are applied during the column type transformation.
+2025-07-25   | J. Ma         | Update extract_base_s3_path(full_s3_path: str) not to rely on specific keyword.              
 ===============================================
 */
 
 
 
-CREATE OR REPLACE PROCEDURE recreate_table_in_athena_poc(database_name string, table_name string, table_def string, metadata_location string)
+CREATE OR REPLACE PROCEDURE create_table_in_glue_poc(database_name string, table_name string, table_def string, metadata_location string)
 RETURNS STRING
 LANGUAGE PYTHON
 RUNTIME_VERSION = 3.11
@@ -322,18 +325,9 @@ def extract_snow_columns(table_ddl: str) -> str:
         return ""
         
 def extract_base_s3_path(full_s3_path: str) -> str:
-    logger.debug(f"extract_base_s3_path: Input full_s3_path: '{full_s3_path}'")
+    base_path = full_s3_path.rsplit('/', 1)[0] + '/'
+    return base_path
 
-    regex_pattern = r"^(s3://[^/]+(?:/[^/]+)*/TESTSC/)"
-    match = re.match(regex_pattern, full_s3_path, re.IGNORECASE)
-
-    if match:
-        extracted_path = match.group(1) # Get the captured group
-        logger.debug(f"extract_base_s3_path: Extracted base path: '{extracted_path}'")
-        return extracted_path
-    else:
-        logger.warning(f"extract_base_s3_path: No base path matching pattern found in '{full_s3_path}'. Returning original path.")
-        return full_s3_path
             
 def parse_columns_to_glue_format(columns_str: str) -> list:
     """
@@ -433,6 +427,11 @@ def check_and_create_table(database_name, table_name, table_definition, metadata
         logger.info(f"Table {table_name} does not exist. Creating table...")
         logger.debug(f" table_definition is {snow_table_column_definition} ")
         logger.debug(f" metadata_location is {metadata_location} ")
-        return create_table(database_name, table_name, snow_table_column_definition, metadata_location)
+        create_table(database_name, table_name, snow_table_column_definition, metadata_location)
+        logger.info(f"Table {table_name} created successfully in glue catalog.")
+        return f"Table {table_name} created successfully in glue catalog."
+    else:
+        logger.info(f"Table {table_name} already exists in glue catalog.")
+        return f"Table {table_name} already exists in glue catalog."
 
 $$;
