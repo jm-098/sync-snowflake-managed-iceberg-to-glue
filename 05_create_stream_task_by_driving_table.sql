@@ -2,7 +2,9 @@
 /* ==============================================
   File: 05_create_stream_task_by_driving_table.sql
   Description:  This script creates a driving table to manage streams and tasks for Iceberg tables in Snowflake.
-                It dynamically creates streams and tasks based on the entries in the driving table.
+                It also resumes the tasks upon creation.  Commented this our if not needed.
+                It dynamically creates streams and tasks based on the entries in the driving table. 
+                Streams and tasks are created in the same database and schema as the snowflake tables. 
                 If the driving table is named different, update the table name in the script accordingly.
                 Replace the stored procedure call with the new procedure name if it has been changed.
                 Modify the script if to create stream and tasks in different database or schema than in session context.
@@ -12,7 +14,8 @@
  Date        | Author        | Description
 -------------|---------------|------------------------------------------------------
 2025-07-10   | J. Ma         | Created
-2025-07-25   | J. Ma         | Updated the call in task to update_glue_metadata_location to pass on get_ddl 
+2025-07-25   | J. Ma         | Updated the call in task to update_glue_metadata_location to pass on get_ddl
+2025-07-25   | J. Ma         | Updated the call in task to fully qualify all identifiers: streams, snowflake tables, tasks.  
 ===============================================
 */
  
@@ -37,11 +40,12 @@ $$
     task_name varchar ;
 begin
     for vw1 in vw1_cur do
-       stream_name := concat(vw1.snow_table_name, '_str');
+       stream_name := vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'|| concat(vw1.snow_table_name, '_str');
+    
        my_sql := 'CREATE OR REPLACE STREAM ' || :stream_name || ' ON TABLE ' || vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'|| vw1.snow_table_name || ';';
        execute immediate :my_sql;
        
-       task_name := concat(vw1.snow_table_name, '_task');
+       task_name := vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'||concat(vw1.snow_table_name, '_task');
        my_sql :=  '
             CREATE OR REPLACE TASK ' || :task_name || '
             WAREHOUSE = XSMALL_WH  
@@ -52,12 +56,18 @@ begin
                 call update_glue_metadata_location('''||vw1.athena_db_name||''', 
                 '''||vw1.athena_table_name||''',  
                 get_ddl(''table'', '''||vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'||vw1.snow_table_name||'''),
-                CAST(GET(PARSE_JSON(SYSTEM$GET_ICEBERG_TABLE_INFORMATION('''||vw1.snow_table_name||''')), ''metadataLocation'') AS VARCHAR),
+                CAST(GET(PARSE_JSON(SYSTEM$GET_ICEBERG_TABLE_INFORMATION('''||vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'||vw1.snow_table_name||''')), ''metadataLocation'') AS VARCHAR),
                 '''||:stream_name||''');
             END;
         ';
         
        execute immediate :my_sql;
+
+       my_sql :=  ' alter task ' || :task_name || ' resume ';
+
+       execute immediate :my_sql;
     end for;
+
+
 end;
-$$;
+$$; 
