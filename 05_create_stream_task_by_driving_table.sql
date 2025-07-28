@@ -6,6 +6,7 @@
                 It dynamically creates streams and tasks based on the entries in the driving table. 
                 Streams and tasks are created in the same database and schema as the snowflake tables. 
                 If the driving table is named different, update the table name in the script accordingly.
+                It assumes the update proc,update_glue_metadata_location, is in the same db and schema as this proc. Adjust if necessary. 
                 Replace the stored procedure call with the new procedure name if it has been changed.
                 Modify the script if to create stream and tasks in different database or schema than in session context.
  ===============================================
