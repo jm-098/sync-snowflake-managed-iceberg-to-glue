@@ -23,6 +23,7 @@ call CREATE_STREAMS_AND_TASKS_FOR_TABLES('XSMALL_WH');
 2025-07-25   | J. Ma         | Updated the call in task to update_glue_metadata_location to pass on get_ddl
 2025-07-25   | J. Ma         | Updated the call in task to fully qualify all identifiers: streams, snowflake tables, tasks.  
 2025-07-28   | J. Ma         | Updated the procedure to take warehouse name as a parameter for task creation. Added error handling and logging.
+             |               | Update included_flag to 'N' after stream and task creation to avoid re-creation.
 ===============================================
 */
  
@@ -72,11 +73,12 @@ begin
                 '''||:stream_name||''');
             END;
         ';
-        
        execute immediate :my_sql;
 
        my_sql :=  ' alter task ' || :task_name || ' resume ';
+       execute immediate :my_sql;
 
+       my_sql := 'UPDATE iceberg_table_list SET include_flag = ''N'' WHERE snow_db_name = '''||vw1.snow_db_name||''' AND snow_schema_name = '''||vw1.snow_schema_name||''' AND snow_table_name = '''||vw1.snow_table_name||''';';
        execute immediate :my_sql;
     end for;
     
