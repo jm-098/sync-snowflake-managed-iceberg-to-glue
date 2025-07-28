@@ -6,9 +6,14 @@
                 It dynamically creates streams and tasks based on the entries in the driving table. 
                 Streams and tasks are created in the same database and schema as the snowflake tables. 
                 If the driving table is named different, update the table name in the script accordingly.
-                It assumes the update proc,update_glue_metadata_location, is in the same db and schema as this proc. Adjust if necessary. 
-                Replace the stored procedure call with the new procedure name if it has been changed.
+                It assumes the update proc, update_glue_metadata_location, is in the same db and schema as this proc. Adjust if necessary. 
+                Replace update_glue_metadata_location with the new procedure name if it has been changed.
                 Modify the script if to create stream and tasks in different database or schema than in session context.
+                The driving table can be enhanced to include more columns as needed, such as an include_flag, to avoid regenerate. 
+Sample Call:
+ -----------------------------------------------
+call CREATE_STREAMS_AND_TASKS_FOR_TABLES('XSMALL_WH');
+----------------------------------------------- 
  ===============================================
  Change History
 ===============================================
@@ -17,30 +22,36 @@
 2025-07-10   | J. Ma         | Created
 2025-07-25   | J. Ma         | Updated the call in task to update_glue_metadata_location to pass on get_ddl
 2025-07-25   | J. Ma         | Updated the call in task to fully qualify all identifiers: streams, snowflake tables, tasks.  
+2025-07-28   | J. Ma         | Updated the procedure to take warehouse name as a parameter for task creation. Added error handling and logging.
 ===============================================
 */
  
 -- create the driving table
-  create or replace table iceberg_table_list (id number, snow_db_name varchar, snow_schema_name varchar, snow_table_name varchar, athena_db_name varchar, athena_table_name varchar, task_schedule_minutes number, updated_date datetime); -- populate the driving table with the list of iceberg tables and their corresponding Athena database and table names
+  create or replace table iceberg_table_list (id number, snow_db_name varchar, 
+  snow_schema_name varchar, snow_table_name varchar, athena_db_name varchar, 
+  athena_table_name varchar, task_schedule_minutes number, updated_date datetime, included_flag varchar); 
+ 
 -- insert some sample data into the driving table, ie:
- insert into iceberg_table_list values ( 1, 'iceberg_db', 'testsc',  'simple_schema_smi2', 'aj_test', 'iceberg_table_from_boto2', 1, current_date);
+ insert into iceberg_table_list values ( 1, 'iceberg_db', 'testsc',  'simple_schema_smi2', 'aj_test', 'iceberg_table_from_boto2', 1, current_date, 'Y');
 
 -- create streams and tasks for each iceberg table that in driving table
 
-
-CREATE OR REPLACE PROCEDURE CREATE_STREAMS_AND_TASKS_FOR_TABLES()
+CREATE OR REPLACE PROCEDURE CREATE_STREAMS_AND_TASKS_FOR_TABLES(wh_name varchar)
 RETURNS VARCHAR
 LANGUAGE SQL
 AS
 $$
  declare
-    rs RESULTSET default (select snow_db_name, snow_schema_name, snow_table_name, athena_db_name, athena_table_name, task_schedule_minutes from iceberg_table_list);
+    rs RESULTSET default (select snow_db_name, snow_schema_name, snow_table_name, athena_db_name, athena_table_name, task_schedule_minutes from iceberg_table_list where include_flag = 'Y');
     vw1_cur CURSOR for rs;
     my_sql varchar;
     stream_name varchar;
     task_name varchar ;
+    lcnt number default 0;
+    V_PROC_NAME VARCHAR(255) DEFAULT 'CREATE_STREAMS_AND_TASKS_FOR_TABLES';
 begin
     for vw1 in vw1_cur do
+       lcnt := lcnt + 1;
        stream_name := vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'|| concat(vw1.snow_table_name, '_str');
     
        my_sql := 'CREATE OR REPLACE STREAM ' || :stream_name || ' ON TABLE ' || vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'|| vw1.snow_table_name || ';';
@@ -49,7 +60,7 @@ begin
        task_name := vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'||concat(vw1.snow_table_name, '_task');
        my_sql :=  '
             CREATE OR REPLACE TASK ' || :task_name || '
-            WAREHOUSE = XSMALL_WH  
+            WAREHOUSE = '|| :wh_name ||' 
             SCHEDULE = '''|| vw1.task_schedule_minutes ||' MINUTE''
             WHEN SYSTEM$STREAM_HAS_DATA('''||:stream_name||''')
             AS
@@ -68,7 +79,19 @@ begin
 
        execute immediate :my_sql;
     end for;
+    
+    
+    SYSTEM$LOG_INFO('PROCEDURE ' || :V_PROC_NAME || ' completed successfully. Total records processed: ' || :lcnt);
+    return 'Success. Number of records processed: '||:lcnt;
+EXCEPTION
+    WHEN OTHER THEN
+        SYSTEM$LOG_ERROR(
+            'PROCEDURE ' || :V_PROC_NAME || ' failed. ' ||
+            'Error Code: ' || SQLCODE || '. ' ||
+            'Error Message: ' || SQLERRM 
+        );
 
+    RETURN 'Error recording log event: ' || SQLERRM;
 
 end;
 $$; 
