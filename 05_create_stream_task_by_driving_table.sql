@@ -2,18 +2,18 @@
 /* ==============================================
   File: 05_create_stream_task_by_driving_table.sql
   Description:  This script leverages a driving table to create streams and tasks for each iceberg table in Snowflake that needs to be synced over to Athena.
-                It also resumes the tasks upon creation.  Commented this our if not desired.
+                It also resumes the tasks upon creation.  Commented this out if not desired.
+                To process the tables in the list, their include_flags need to be set to 'Y'. 
+                The include_flag is set to 'N' for each table after its stream and task are created 
                 Streams and tasks are created in the same database and schema as the snowflake iceberg tables. 
                 To create the procedure, do the following: 
                 - If the driving table is named different, update the table name in the script accordingly.
-                - It assumes the update proc, update_glue_metadata_location, is in the same db and schema as this proc. Adjust if necessary. 
-                - Replace update_glue_metadata_location with the new procedure name if it has been changed.
-                - Modify the script if to create stream and tasks in different database or schema than in session context.
-                - The driving table is enhanced to have an include_flag, to avoid regenerate.  
-                  The table need to be updated to set the include_flag to 'Y' for the tables that need to be processed.
-                  The table need to be updated to set the include_flag to 'N' to avoid re-creation of streams and tasks.
-                  If desired, the include_flag can be set to 'N' after the streams and tasks are created to avoid re-creation.
-              
+                - It assumes the update proc, update_glue_metadata_location, is in the same db and schema as this proc. Adjust if necessary.
+                - Replace update_glue_metadata_location with the your procedure name if it is named differently.
+                - It is assumed that update_glue_metadata_location is in the same database and schema as the procedure as this proc.  Adjust if necessary.
+                - Modify the script if to create stream and tasks in different database or schema than those for the iceberg tables.
+                - streams are created with the name of the table with '_str' suffix, and tasks are created with the name of the table with '_task' suffix. 
+                  Update the sufffix if needed.
                 
 Sample Call:
  -----------------------------------------------
@@ -28,8 +28,7 @@ call CREATE_STREAMS_AND_TASKS_FOR_TABLES('XSMALL_WH');
 2025-07-25   | J. Ma         | Updated the call in task to update_glue_metadata_location to pass on get_ddl
 2025-07-25   | J. Ma         | Updated the call in task to fully qualify all identifiers: streams, snowflake tables, tasks.  
 2025-07-28   | J. Ma         | Updated the procedure to take warehouse name as a parameter for task creation. Added error handling and logging.
-             |               | Update the procedure to generate tasks with fually qualified objects.
-
+             |               | Update the procedure to generate tasks with fually qualified objects, and update include_flag to 'N'.
 ===============================================
 */
  
@@ -49,7 +48,8 @@ LANGUAGE SQL
 AS
 $$
  declare
-    rs RESULTSET default (select snow_db_name, snow_schema_name, snow_table_name, athena_db_name, athena_table_name, task_schedule_minutes from iceberg_table_list where include_flag = 'Y');
+    rs RESULTSET default (select snow_db_name, snow_schema_name, snow_table_name, athena_db_name, athena_table_name, task_schedule_minutes 
+                          from iceberg_table_list where include_flag = 'Y');
     vw1_cur CURSOR for rs;
     my_sql varchar;
     stream_name varchar;
