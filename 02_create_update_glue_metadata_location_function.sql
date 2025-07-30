@@ -1,9 +1,12 @@
 /* ==============================================
 Procedure: update_glue_metadata_location_poc
 Description:  These procedures update the metadata location of an Iceberg table in AWS Glue
-              to create the procedure, replace aws_glue_access_int_with_token with your own external access integration
-              and aws_glue_creds_secret_token with your own secret token 
-              replace us-west-2 with your own region
+              to create the procedure:
+                 - replace aws_glue_access_int_with_token with your own external access integration
+                 - replace aws_glue_creds_secret_token with your own secret token 
+                 - replace us-west-2 with your own region
+                 - add addtional data types to the type_mapping dictionary if needed
+
 
  Sample Call:
  -----------------------------------------------
@@ -28,6 +31,8 @@ Description:  These procedures update the metadata location of an Iceberg table 
              |               | leverage logging
 2025-07-25   | J. Ma         | updated update procedure to automatically sync schema changes from Snowflake to Athena
              |               | Combined create table logic and update logic into one procedure
+             |               | For data type conversion, timezone is not converted, so it is assumed that the data in Snowflake and Athena are in the same timezone.
+             |               | For data type conversion, geometry types are not supported in Athena, it is currently not mappped. 
 ===============================================
 */
 
@@ -42,8 +47,8 @@ LANGUAGE PYTHON
 RUNTIME_VERSION = '3.11'
 PACKAGES = ('boto3','botocore', 'snowflake-snowpark-python')
 HANDLER = 'check_and_update'
-EXTERNAL_ACCESS_INTEGRATIONS = (aws_glue_external_id_int_2)
-SECRETS = ('cred'=aws_glue_min_access_token)
+EXTERNAL_ACCESS_INTEGRATIONS = (aws_glue_access_int_with_token)
+SECRETS = ('cred'=aws_glue_creds_secret_token)
 EXECUTE AS CALLER
 AS 
 $$

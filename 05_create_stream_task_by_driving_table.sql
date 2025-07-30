@@ -1,15 +1,20 @@
 
 /* ==============================================
   File: 05_create_stream_task_by_driving_table.sql
-  Description:  This script creates a driving table to manage streams and tasks for Iceberg tables in Snowflake.
-                It also resumes the tasks upon creation.  Commented this our if not needed.
-                It dynamically creates streams and tasks based on the entries in the driving table. 
-                Streams and tasks are created in the same database and schema as the snowflake tables. 
-                If the driving table is named different, update the table name in the script accordingly.
-                It assumes the update proc, update_glue_metadata_location, is in the same db and schema as this proc. Adjust if necessary. 
-                Replace update_glue_metadata_location with the new procedure name if it has been changed.
-                Modify the script if to create stream and tasks in different database or schema than in session context.
-                The driving table can be enhanced to include more columns as needed, such as an include_flag, to avoid regenerate. 
+  Description:  This script leverages a driving table to create streams and tasks for each iceberg table in Snowflake that needs to be synced over to Athena.
+                It also resumes the tasks upon creation.  Commented this our if not desired.
+                Streams and tasks are created in the same database and schema as the snowflake iceberg tables. 
+                To create the procedure, do the following: 
+                - If the driving table is named different, update the table name in the script accordingly.
+                - It assumes the update proc, update_glue_metadata_location, is in the same db and schema as this proc. Adjust if necessary. 
+                - Replace update_glue_metadata_location with the new procedure name if it has been changed.
+                - Modify the script if to create stream and tasks in different database or schema than in session context.
+                - The driving table is enhanced to have an include_flag, to avoid regenerate.  
+                  The table need to be updated to set the include_flag to 'Y' for the tables that need to be processed.
+                  The table need to be updated to set the include_flag to 'N' to avoid re-creation of streams and tasks.
+                  If desired, the include_flag can be set to 'N' after the streams and tasks are created to avoid re-creation.
+              
+                
 Sample Call:
  -----------------------------------------------
 call CREATE_STREAMS_AND_TASKS_FOR_TABLES('XSMALL_WH');
@@ -23,7 +28,8 @@ call CREATE_STREAMS_AND_TASKS_FOR_TABLES('XSMALL_WH');
 2025-07-25   | J. Ma         | Updated the call in task to update_glue_metadata_location to pass on get_ddl
 2025-07-25   | J. Ma         | Updated the call in task to fully qualify all identifiers: streams, snowflake tables, tasks.  
 2025-07-28   | J. Ma         | Updated the procedure to take warehouse name as a parameter for task creation. Added error handling and logging.
-             |               | Update included_flag to 'N' after stream and task creation to avoid re-creation.
+             |               | Update the procedure to generate tasks with fually qualified objects.
+
 ===============================================
 */
  
