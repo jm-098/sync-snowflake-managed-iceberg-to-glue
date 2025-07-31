@@ -33,6 +33,7 @@ Description:  These procedures update the metadata location of an Iceberg table 
              |               | Combined create table logic and update logic into one procedure
              |               | For data type conversion, timezone is not converted, so it is assumed that the data in Snowflake and Athena are in the same timezone.
              |               | For data type conversion, geometry types are not supported in Athena, it is currently not mappped. 
+2025-7-31    | J. Ma         | Fixed bug with clear stream.         
 ===============================================
 */
 
@@ -172,8 +173,7 @@ def parse_columns_to_glue_format(columns_str: str) -> list:
         'float': 'double',
         'double': 'double',
         'boolean': 'boolean',
-        'date': 'date',
-        'timestamp_ntz(6)': 'timestamp'
+        'date': 'date' 
     }
 
     parsed_columns = []
@@ -227,7 +227,7 @@ def clear_stream(session, stream_name):
         logger.exception(f"Error in clear_stream: {str(e)}")
         return f"Error: {str(e)}"
         
-def update_table( database_name, table_name, snow_table_def, new_metadata_location, snow_stream_name):
+def update_table( session, database_name, table_name, snow_table_def, new_metadata_location, snow_stream_name):
     existing_table = get_table_details(database_name, table_name)
     snow_column_def = extract_snow_columns (snow_table_def)
     glue_column_list = parse_columns_to_glue_format (snow_column_def)
@@ -259,6 +259,7 @@ def update_table( database_name, table_name, snow_table_def, new_metadata_locati
         logger.info(f"Successfully updated for {table_name} at {datetime.now()}")
 
         str_clear_response = clear_stream (session, snow_stream_name)
+        
         return 'successful update. '
     except Exception as e:
         logger.exception("An error occurred during updated for {table_name} at {datetime.now()}")
@@ -274,9 +275,8 @@ def check_and_update(session, athena_database_name, athena_table_name, snow_tabl
         return f"Table {athena_table_name} created successfully in glue catalog."
     else:
         logger.info(f"Table {athena_table_name} exists. Perform update...")
-        update_table(athena_database_name, athena_table_name, snow_table_def, snow_metadata_location, snow_stream_name)
+        update_table(session, athena_database_name, athena_table_name, snow_table_def, snow_metadata_location, snow_stream_name)
         logger.info(f"Updated table: {athena_table_name} ")
         return f"Table {athena_table_name} already exists in glue catalog. Updated."
 $$
 ;
-
