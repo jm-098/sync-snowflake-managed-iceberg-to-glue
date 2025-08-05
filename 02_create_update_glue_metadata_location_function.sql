@@ -33,7 +33,8 @@ Description:  These procedures update the metadata location of an Iceberg table 
              |               | Combined create table logic and update logic into one procedure
              |               | For data type conversion, timezone is not converted, so it is assumed that the data in Snowflake and Athena are in the same timezone.
              |               | For data type conversion, geometry types are not supported in Athena, it is currently not mappped. 
-2025-7-31    | J. Ma         | Fixed bug with clear stream.         
+2025-07-31   | J. Ma         | Fixed bug with clear stream.       
+2025-08-04   | J. Ma         | Clear stream for create table as well, so that the stream is always clear before the task runs.         
 ===============================================
 */
 
@@ -258,8 +259,7 @@ def update_table( session, database_name, table_name, snow_table_def, new_metada
         response = glue_client.update_table(**update_table_dict)
         logger.info(f"Successfully updated for {table_name} at {datetime.now()}")
 
-        str_clear_response = clear_stream (session, snow_stream_name)
-        
+              
         return 'successful update. '
     except Exception as e:
         logger.exception("An error occurred during updated for {table_name} at {datetime.now()}")
@@ -272,11 +272,15 @@ def check_and_update(session, athena_database_name, athena_table_name, snow_tabl
         logger.info(f"Table {athena_table_name} does not exist. Creating table...")
         create_table(athena_database_name, athena_table_name, snow_table_def, snow_metadata_location)
         logger.info(f"Table {athena_table_name} created successfully in glue catalog.")
+        str_clear_response = clear_stream (session, snow_stream_name)
         return f"Table {athena_table_name} created successfully in glue catalog."
     else:
         logger.info(f"Table {athena_table_name} exists. Perform update...")
         update_table(session, athena_database_name, athena_table_name, snow_table_def, snow_metadata_location, snow_stream_name)
         logger.info(f"Updated table: {athena_table_name} ")
+        str_clear_response = clear_stream (session, snow_stream_name)
         return f"Table {athena_table_name} already exists in glue catalog. Updated."
+    
+
 $$
 ;

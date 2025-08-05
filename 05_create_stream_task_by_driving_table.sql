@@ -29,10 +29,13 @@ call CREATE_STREAMS_AND_TASKS_FOR_TABLES('XSMALL_WH');
 2025-07-25   | J. Ma         | Updated the call in task to fully qualify all identifiers: streams, snowflake tables, tasks.  
 2025-07-28   | J. Ma         | Updated the procedure to take warehouse name as a parameter for task creation. Added error handling and logging.
              |               | Update the procedure to generate tasks with fually qualified objects, and update include_flag to 'N'.
+2025-08-05   | J. Ma         | Add my_db.my_schema to this procedure name, the driving table, and the update_glue_metadata_location procedure. Make it easier to change the database and schema names.             |               | 
 ===============================================
 */
  
 -- create the driving table
+  use database my_db;
+  use schema my_schema;
   create or replace table iceberg_table_list (id number, snow_db_name varchar, 
   snow_schema_name varchar, snow_table_name varchar, athena_db_name varchar, 
   athena_table_name varchar, task_schedule_minutes number, updated_date datetime, included_flag varchar); 
@@ -42,14 +45,14 @@ call CREATE_STREAMS_AND_TASKS_FOR_TABLES('XSMALL_WH');
 
 -- create streams and tasks for each iceberg table that in driving table
 
-CREATE OR REPLACE PROCEDURE CREATE_STREAMS_AND_TASKS_FOR_TABLES(wh_name varchar)
+CREATE OR REPLACE PROCEDURE my_db.my_schema.CREATE_STREAMS_AND_TASKS_FOR_TABLES(wh_name varchar)
 RETURNS VARCHAR
 LANGUAGE SQL
 AS
 $$
  declare
     rs RESULTSET default (select snow_db_name, snow_schema_name, snow_table_name, athena_db_name, athena_table_name, task_schedule_minutes 
-                          from iceberg_table_list where include_flag = 'Y');
+                          from my_db.my_schema.iceberg_table_list where include_flag = 'Y');
     vw1_cur CURSOR for rs;
     my_sql varchar;
     stream_name varchar;
@@ -72,7 +75,7 @@ begin
             WHEN SYSTEM$STREAM_HAS_DATA('''||:stream_name||''')
             AS
             BEGIN
-                call update_glue_metadata_location('''||vw1.athena_db_name||''', 
+                call my_db.my_schema.update_glue_metadata_location('''||vw1.athena_db_name||''', 
                 '''||vw1.athena_table_name||''',  
                 get_ddl(''table'', '''||vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'||vw1.snow_table_name||'''),
                 CAST(GET(PARSE_JSON(SYSTEM$GET_ICEBERG_TABLE_INFORMATION('''||vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'||vw1.snow_table_name||''')), ''metadataLocation'') AS VARCHAR),
@@ -84,7 +87,7 @@ begin
        my_sql :=  ' alter task ' || :task_name || ' resume ';
        execute immediate :my_sql;
 
-       my_sql := 'UPDATE iceberg_table_list SET include_flag = ''N'' WHERE snow_db_name = '''||vw1.snow_db_name||''' AND snow_schema_name = '''||vw1.snow_schema_name||''' AND snow_table_name = '''||vw1.snow_table_name||''';';
+       my_sql := 'UPDATE my_db.my_schema.iceberg_table_list SET include_flag = ''N'' WHERE snow_db_name = '''||vw1.snow_db_name||''' AND snow_schema_name = '''||vw1.snow_schema_name||''' AND snow_table_name = '''||vw1.snow_table_name||''';';
        execute immediate :my_sql;
     end for;
     
