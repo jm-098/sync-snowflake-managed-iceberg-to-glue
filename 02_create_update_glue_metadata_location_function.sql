@@ -128,8 +128,10 @@ def create_table(database_name, table_name, col_definition_str, metadata_locatio
             DatabaseName=database_name,
             TableInput=table_input
         )
+        return 'successful created. '
     except Exception as e:
-            logger.exception(f" Failed to create {table_name} in database {database_name}:{str(e)} ")
+        logger.exception(f" Failed to create {table_name} in database {database_name}:{str(e)} ")
+        return 'failed to create: ' + str(e)
 
 
 def get_table_details(athena_database_name, athena_table_name):
@@ -270,16 +272,16 @@ def check_and_update(session, athena_database_name, athena_table_name, snow_tabl
 
     if not check_table_exists(athena_database_name, athena_table_name):
         logger.info(f"Table {athena_table_name} does not exist. Creating table...")
-        create_table(athena_database_name, athena_table_name, snow_table_def, snow_metadata_location)
+        return_msg = create_table(athena_database_name, athena_table_name, snow_table_def, snow_metadata_location)
         logger.info(f"Table {athena_table_name} created successfully in glue catalog.")
         str_clear_response = clear_stream (session, snow_stream_name)
-        return f"Table {athena_table_name} created successfully in glue catalog."
+        return f"Table {athena_table_name} created with this msg: {return_msg}."
     else:
         logger.info(f"Table {athena_table_name} exists. Perform update...")
-        update_table(session, athena_database_name, athena_table_name, snow_table_def, snow_metadata_location, snow_stream_name)
+        return_msg = update_table(session, athena_database_name, athena_table_name, snow_table_def, snow_metadata_location, snow_stream_name)
         logger.info(f"Updated table: {athena_table_name} ")
         str_clear_response = clear_stream (session, snow_stream_name)
-        return f"Table {athena_table_name} already exists in glue catalog. Updated."
+        return f"Table {athena_table_name} updated with this msg: {return_msg}."
     
 
 $$
