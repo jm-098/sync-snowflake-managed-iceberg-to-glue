@@ -34,7 +34,9 @@ Description:  These procedures update the metadata location of an Iceberg table 
              |               | For data type conversion, timezone is not converted, so it is assumed that the data in Snowflake and Athena are in the same timezone.
              |               | For data type conversion, geometry types are not supported in Athena, it is currently not mappped. 
 2025-07-31   | J. Ma         | Fixed bug with clear stream.       
-2025-08-04   | J. Ma         | Clear stream for create table as well, so that the stream is always clear before the task runs.         
+2025-08-04   | J. Ma         | Clear stream for create table as well, so that the stream is always clear before the task runs.    
+2025-08-07   | J. Ma         | Propagate error msg from  individual functions to the main procedure return message.     
+             |               | Added logic to check if database exists, if not, create it,  before creating or updating the table.
 ===============================================
 */
 
@@ -85,7 +87,36 @@ glue_client = boto3.client(
     region_name='us-west-2'
 )
 
+def check_database_exists (athena_database_name):
+    try:
+        glue_client.get_database(Name=athena_database_name)
+        logger.info(f"Database '{athena_database_name}' exists.")
+        return True
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'EntityNotFoundException':
+            logger.info(f"Database '{athena_database_name}' does not exist.")
+            return False
+        else:
+            logger.exception(f"Error checking if database '{athena_database_name}' exists.")
+    except Exception as e:
+        logger.exception("An unhandled exception occurred in check_database_exists.")
 
+def create_database (athena_database_name): 
+    try:
+        glue_client.create_database(
+            DatabaseInput={
+                'Name': athena_database_name
+            }
+        )
+        logger.info(f"Database '{athena_database_name}' created successfully.")
+        return f"Database '{athena_database_name}' created successfully."
+    except ClientError as e:
+        logger.exception(f"Error creating database '{athena_database_name}'.")
+        return f"ERROR: Failed to create database '{athena_database_name}'. Error: {e}"
+    except Exception as e:
+        logger.exception("An unhandled exception occurred. Error: {e}")
+        return f"ERROR: An unhandled exception occurred. Error: {e}"
+    
 def check_table_exists(athena_database_name, athena_table_name):
     try:
         response = glue_client.get_table(
@@ -98,7 +129,9 @@ def check_table_exists(athena_database_name, athena_table_name):
             return False  # Table does not exist
         else:
             logger.exception(f"Sth wrong when checking if {table_name} exists in athena. ")
-
+    except Exception as e:
+        logger.exception("An unhandled exception occurred in check_table_exists.")
+        
 def extract_base_s3_path(full_s3_path: str) -> str:
     base_path = full_s3_path.rsplit('/', 1)[0] + '/'
     return base_path
@@ -119,8 +152,6 @@ def create_table(database_name, table_name, col_definition_str, metadata_locatio
                 'table_type': 'ICEBERG'
             }
     }
-
-    
      
     # Start query execution for table creation
     try: 
@@ -270,19 +301,41 @@ def update_table( session, database_name, table_name, snow_table_def, new_metada
 
 def check_and_update(session, athena_database_name, athena_table_name, snow_table_def, snow_metadata_location, snow_stream_name):
 
-    if not check_table_exists(athena_database_name, athena_table_name):
-        logger.info(f"Table {athena_table_name} does not exist. Creating table...")
-        return_msg = create_table(athena_database_name, athena_table_name, snow_table_def, snow_metadata_location)
-        logger.info(f"Table {athena_table_name} created successfully in glue catalog.")
-        str_clear_response = clear_stream (session, snow_stream_name)
-        return f"Table {athena_table_name} created with this msg: {return_msg}."
-    else:
-        logger.info(f"Table {athena_table_name} exists. Perform update...")
-        return_msg = update_table(session, athena_database_name, athena_table_name, snow_table_def, snow_metadata_location, snow_stream_name)
-        logger.info(f"Updated table: {athena_table_name} ")
-        str_clear_response = clear_stream (session, snow_stream_name)
-        return f"Table {athena_table_name} updated with this msg: {return_msg}."
-    
+    try:
+        if not check_database_exists (athena_database_name):
+            return_msg = create_database(athena_database_name)
 
+            if 'success' in return_msg:
+                logger.info( f"create database  '{athena_database_name}' .")
+            else:  
+                logger.exception(f"create database {athena_database_name} failed. Message: {return_msg}")
+                raise Exception(f"create database {athena_database_name} failed. Message: {return_msg}")
+
+            
+        if not check_table_exists(athena_database_name, athena_table_name):
+            logger.info(f"Table {athena_table_name} does not exist. Creating table...")
+            return_msg = create_table(athena_database_name, athena_table_name, snow_table_def, snow_metadata_location)
+            logger.info(f"Table {athena_table_name} created with this msg: {return_msg}.")
+        else:
+            logger.info(f"Table {athena_table_name} exists. Perform update...")
+            return_msg = update_table(session, athena_database_name, athena_table_name, snow_table_def, snow_metadata_location, snow_stream_name)
+            logger.info(f"Table {athena_table_name} updated with this msg: {return_msg}.")
+    
+            
+        if 'success' in return_msg:
+            stream_clear_msg = clear_stream (session, snow_stream_name)
+            if 'success' in stream_clear_msg:
+                logger.info( f"SUCCESS: Table '{athena_table_name}' processed. Stream cleared.")
+            else:
+                logger.exception(f"Failed to clear stream. Message: {stream_clear_msg}")
+                raise Exception(f"Failed to clear stream. Message: {stream_clear_msg}")
+        else:  
+            logger.exception(f"Main operation for {athena_table_name} failed. Message: {return_msg}")
+            raise Exception(f"Main operation for {athena_table_name} failed. Message: {return_msg}")
+
+        return f"Successfull processed table '{athena_table_name}' "
+    except Exception as e:
+        logger.exception("An unhandled exception occurred.Error: {e}")
+        return f"ERROR: Failed to process table '{athena_table_name}'. Error: {e}"
 $$
 ;
