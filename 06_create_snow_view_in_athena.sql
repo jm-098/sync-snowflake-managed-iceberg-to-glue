@@ -115,13 +115,6 @@ config = Config(
     max_pool_connections=50
 )
 
-glue_client = boto3.client(
-    service_name='glue',
-    aws_access_key_id = cloud_provider_object.access_key_id,
-    aws_secret_access_key = cloud_provider_object.secret_access_key,
-    aws_session_token=cloud_provider_object.token,
-    region_name='us-west-2'
-)
 
 athena_client = boto3.client(
     service_name='athena',
