@@ -11,6 +11,7 @@ Description: This script sets up a secret and external access integration to all
 2025-06-18   | J. Hughes     | Created
 2025-07-10   | J. Ma         | Added option for AWS application ID authentication
 2025-07-25   | J. Ma         | Updated sample policy for Glue access
+2025-08-08   | J. Ma         | Added sample IAM policy for create database in glue and run query in athena
 ===============================================
 */
 
@@ -51,7 +52,7 @@ CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION aws_glue_access_int
 -- add permissions for glue: https://docs.aws.amazon.com/glue/latest/dg/set-up-iam.html
 -- https://docs.aws.amazon.com/athena/latest/ug/security-iam-athena.html
 
--- Sample, minimal IAM policy for Glue access:
+-- Sample, minimal IAM policy for Glue access, for the procedure 'update_glue_metadata_location', just to update the metadata location in Glue:
 /* 
 {
 	"Version": "2012-10-17",
@@ -106,3 +107,70 @@ CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION aws_glue_access_int_with_token
   ALLOWED_NETWORK_RULES = (aws_glue_access_rule)
   ALLOWED_AUTHENTICATION_SECRETS =(aws_glue_creds_secret_token)
   ENABLED = true;
+
+
+-------------------------------------------------------------------
+-- to leverage athena client, need add these entries to the network rule for the external access integration:
+-- 'athena.us-west-2.amazonaws.com',
+-- 'athena.us-west-2.api.aws'
+
+
+Alter EXTERNAL ACCESS INTEGRATION aws_glue_access_int
+  ADD ALLOWED_NETWORK_RULES = ('athena.us-west-2.amazonaws.com', 
+                               'athena.us-west-2.api.aws');
+
+
+-- Sample IAM policy for create database in glue and run query in athena, for the procedure 'sync_views_to_athena' :
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "GluePermissions",
+            "Effect": "Allow",
+            "Action": [
+                "glue:GetDatabase",
+                "glue:UpdateDatabase",
+                "glue:DeleteDatabase",
+                "glue:CreateDatabase",
+                "glue:GetTable",
+                "glue:GetTables",
+                "glue:CreateTable",
+                "glue:UpdateTable",
+                "glue:GetDatabases"
+            ],
+            "Resource": [
+                "arn:aws:glue:us-west-2:087354435437:catalog",
+                "arn:aws:glue:us-west-2:087354435437:database/*",
+                "arn:aws:glue:us-west-2:087354435437:table/*/*"
+            ]
+        },
+        {
+            "Sid": "AthenaPermissions",
+            "Effect": "Allow",
+            "Action": [
+                "athena:StartQueryExecution",
+                "athena:StopQueryExecution",
+                "athena:GetQueryExecution",
+                "athena:GetQueryResults"
+            ],
+            "Resource": "arn:aws:athena:us-west-2:087354435437:workgroup/primary"
+        },
+        {
+            "Sid": "S3Permissions",
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetBucketLocation",
+                "s3:ListAllMyBuckets",
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": [
+                "arn:aws:s3:::jieuswest2",
+                "arn:aws:s3:::jieuswest2/*"
+            ]
+        }
+    ]
+}

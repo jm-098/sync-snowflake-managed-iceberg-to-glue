@@ -50,7 +50,7 @@ Description:  This procedure creates views in athena from snowflake views.
                  - replace aws_glue_access_int_with_token with your own external access integration
                  - replace aws_glue_creds_secret_token with your own secret token 
                  - replace us-west-2 with your own region
-                 - if applicable, add permissions to athena and s3 in IAM role
+                 - the proc execution requires these permissions to athena and s3 in IAM role
                     athena: "athena:StartQueryExecution", "athena:GetQueryExecution","athena:GetQueryResults","athena:StopQueryExecution"
                     s3: "s3:PutObject", "s3:GetObject", "s3:GetObjectVersion", "s3:DeleteObject", "s3:DeleteObjectVersion"
                  - add these 2 in value list for the network rule for the external access integration:
@@ -64,7 +64,8 @@ Description:  This procedure creates views in athena from snowflake views.
  -- Update glue-athena table with snowflake iceberg table data and structure change: 
  CALL sync_views_to_athena(
      get_ddl('table', 'my_snow_db.my_snow_schema.my_snow_iceberg_table'),
-     'my_athena_database'  
+     'my_athena_database' , 
+     'my_athena_output_location' 
  );
 ----------------------------------------------- 
 ===============================================
