@@ -3,13 +3,50 @@ Procedure: sync_views_to_athena
 Description:  This procedure creates views in athena from snowflake views.
               The procedure takes the DDL of a snowflake view and the athena database name as input. 
               It does not refactor the view defintion for athena, so the view definition must be compatible with athena.
+              It assumes same view definition can be used in both snowflake and athena, with same base tables. The later coexists the view in same athena database, and for snowflake, same db and schema
+              The view defintion in Snowflake shouldn't contain database and schema name for the view or the underlying tables.  
               For the view definition, it simply uses the output from get_ddl('view', 'my_snow_db.my_snow_schema.my_snow_view'), only to delete the column list in the view name.
-              ie: 
+              Ie: 
                   the result of get_ddl: 
                     CREATE OR REPLACE VIEW my_snow_db.my_snow_schema.my_snow_view (col1, col2) AS SELECT * FROM my_snow_db.my_snow_schema.my_snow_table;
                   the query sent to athena will be:
                     CREATE OR REPLACE VIEW my_snow_db.my_snow_schema.my_snow_view AS SELECT * FROM my_snow_db.my_snow_schema.my_snow_table;
-              to create the procedure:
+              For analytical views, it expects the view definition to be compatible with athena, so it does not refactor the view definition: ie: 
+                  In snowflake, result from get_ddl:
+                    create or replace view JTMPV_2(
+                                CUSTOMER_NUM,
+                                CUSTOMER_NAME
+                            ) as
+                            WITH RankedData AS (
+                            SELECT
+                                myid,
+                                col2,
+                                ROW_NUMBER() OVER (PARTITION BY myid ORDER BY col2 DESC) AS rank_num
+                            FROM iceberg_table_from_boto5
+                            )
+                            SELECT
+                                myid AS customer_num,
+                                col2 AS customer_name,
+                                rank_num
+                            FROM RankedData
+                            WHERE rank_num = 1;
+                  The view definition to be passed on to athena is:
+                    create or replace view jtmpv_2
+                        as
+                        WITH RankedData AS (
+                        SELECT
+                            myid,
+                            col2,
+                            ROW_NUMBER() OVER (PARTITION BY myid ORDER BY col2 DESC) AS rank_num
+                        FROM iceberg_table_from_boto5
+                        )
+                        SELECT
+                            myid AS customer_id,
+                            col2 AS customer_name,
+                            rank_num
+                        FROM RankedData
+                        WHERE rank_num = 1;
+              To create the procedure:
                  - replace aws_glue_access_int_with_token with your own external access integration
                  - replace aws_glue_creds_secret_token with your own secret token 
                  - replace us-west-2 with your own region
@@ -35,13 +72,15 @@ Description:  This procedure creates views in athena from snowflake views.
 ===============================================
  Date        | Author        | Description
 -------------|---------------|------------------------------------------------------
-2025-08-07   | J. Ma         | Initial creation         
+2025-08-07   | J. Ma         | Initial creation   
+2025-08-08   | J. Ma         | Added parameter to pass in outlocation for athena query result
 ===============================================
 */
 
 CREATE OR REPLACE PROCEDURE SYNC_VIEWS_TO_ATHENA(
     P_SNOWFLAKE_VIEW_DDL string,
-    P_GLUE_DATABASE_NAME string)
+    P_GLUE_DATABASE_NAME string, 
+    P_ATHENA_OUTPUT_LOCATION string)
 RETURNS VARCHAR
 LANGUAGE PYTHON
 RUNTIME_VERSION = '3.11'
@@ -59,6 +98,7 @@ from botocore.exceptions import ClientError
 import logging
 from datetime import datetime
 import re
+import time
 
 
 logger = logging.getLogger("python_logger")
@@ -114,7 +154,7 @@ def parse_create_view_statement(sql_statement: str) -> dict:
     )
 
     if not match:
-        logger.excepption(f"Invalid CREATE VIEW statement format: {statement}")
+        logger.exception(f"Invalid CREATE VIEW statement format: {statement}")
         raise ValueError(f"Invalid CREATE VIEW statement format: {statement}")
 
     view_name_part = match.group(1).strip()
@@ -135,27 +175,28 @@ def parse_create_view_statement(sql_statement: str) -> dict:
 
 
     logger.info(f"the view name is {view_name}, the query_text is {query_text}, the columns are {columns}") 
+    logger.debug(f"the query_text is {query_text}") 
     return {
         'view_name': view_name,
         'query_text': query_text,
         'columns': columns
     }
+    
         
-def create_views(snowflake_view_ddl, glue_database_name):
+def create_views(snowflake_view_ddl, glue_database_name, athena_output_location):
    
     try:
 
         # Parse the input DDL to get the view name and query
-        logger.info(f"get here jie 1")
         view_info = parse_create_view_statement (snowflake_view_ddl)
         glue_view_name = view_info['view_name']
         query_text = view_info['query_text']
         inferred_columns = view_info['columns']
 
-        output_location = 's3://jieuswest2/csv/ICEBERG_DB/TESTSC/'
+        output_location = athena_output_location
  
         
-        logger.info(f"Parsed DDL. View Name: {glue_view_name}, Query Text: {query_text[:50]}...")
+        logger.debug(f"Parsed DDL. View Name: {glue_view_name}, Query Text: {query_text}. ")
         
         
         # Now, create the view. This call will be safe whether the view existed before or not.
@@ -165,11 +206,24 @@ def create_views(snowflake_view_ddl, glue_database_name):
         ResultConfiguration={'OutputLocation': output_location} 
         )
 
-        query_execution_id = response['QueryExecutionId'] 
-        logger.info(f"Create view '{glue_view_name}', with query_id: {query_execution_id},  Response: {response} ")
-        return f"Create view '{glue_view_name}', with query_id: {query_execution_id},  Response: {response} "
-    
+        query_execution_id = response['QueryExecutionId']
+        status = 'RUNNING'
+        while status in ['QUEUED', 'RUNNING']:
+            status_response = athena_client.get_query_execution(QueryExecutionId=query_execution_id)
+            status = status_response['QueryExecution']['Status']['State']
+            logger.info(f"Athena query status: {status}")
+            if status in ['RUNNING', 'QUEUED']:
+                time.sleep(5)
+        if status == 'SUCCEEDED':
+            logger.info(f"SUCCESS: Successfully created/replaced Athena view. Query ID: {query_execution_id}")
+            return f"SUCCESS: Successfully created/replaced Athena view. Query ID: {query_execution_id}"
+        else:
+            error_message = status_response['QueryExecution']['Status']['StateChangeReason']
+            logger.error(f"ERROR: Failed to sync view to Athena. Query execution id: {query_execution_id}, Error: {error_message}")
+            raise Exception (f"ERROR: Failed to sync view to Athena.Query execution id: {query_execution_id}, Error: {error_message}")
+
+   
     except Exception as e:
-        logger.exception("An unhandled exception occurred.Failed to sync view to Glue. Error: {e}")
-        return f"Failed to sync view to Glue. Error: {e}"
+        logger.exception("An unhandled exception occurred.Failed to sync view to Glue.  Query execution id: {query_execution_id}. Error: {e}")
+        raise Exception ( f"ERROR: Failed to sync view to Athena. Query execution id: {query_execution_id}, Error: {e}")
 $$;
