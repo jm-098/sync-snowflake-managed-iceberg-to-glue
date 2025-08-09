@@ -3,7 +3,7 @@ Procedure: sync_views_to_athena
 Description:  This procedure creates views in athena from snowflake views.
               The procedure takes the DDL of a snowflake view and the athena database name as input. 
               It does not refactor the view defintion for athena, so the view definition must be compatible with athena.
-              It assumes same view definition can be used in both snowflake and athena, with same base tables. The later coexists the view in same athena database, and for snowflake, same db and schema
+              It assumes same view definition can be used in both snowflake and athena, with same base tables. The view should exist in the same database and schema as the base table in snowflake, and in the same database same in athena
               The view defintion in Snowflake shouldn't contain database and schema name for the view or the underlying tables.  
               For the view definition, it simply uses the output from get_ddl('view', 'my_snow_db.my_snow_schema.my_snow_view'), only to delete the column list in the view name.
               Ie: 
@@ -11,8 +11,8 @@ Description:  This procedure creates views in athena from snowflake views.
                     CREATE OR REPLACE VIEW my_snow_db.my_snow_schema.my_snow_view (col1, col2) AS SELECT * FROM my_snow_db.my_snow_schema.my_snow_table;
                   the query sent to athena will be:
                     CREATE OR REPLACE VIEW my_snow_db.my_snow_schema.my_snow_view AS SELECT * FROM my_snow_db.my_snow_schema.my_snow_table;
-              For analytical views, it expects the view definition to be compatible with athena, so it does not refactor the view definition: ie: 
-                  In snowflake, result from get_ddl:
+              An example of analytical views: 
+                  the result from get_ddl in snwoflake:
                     create or replace view JTMPV_2(
                                 CUSTOMER_NUM,
                                 CUSTOMER_NAME
@@ -30,7 +30,7 @@ Description:  This procedure creates views in athena from snowflake views.
                                 rank_num
                             FROM RankedData
                             WHERE rank_num = 1;
-                  The view definition to be passed on to athena is:
+                  the view definition to be passed on to athena is:
                     create or replace view jtmpv_2
                         as
                         WITH RankedData AS (
@@ -74,6 +74,7 @@ Description:  This procedure creates views in athena from snowflake views.
 -------------|---------------|------------------------------------------------------
 2025-08-07   | J. Ma         | Initial creation   
 2025-08-08   | J. Ma         | Added parameter to pass in outlocation for athena query result
+             |               | Droped unused glue_client
 ===============================================
 */
 
