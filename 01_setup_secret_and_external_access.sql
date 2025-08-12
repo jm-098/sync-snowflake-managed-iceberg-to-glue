@@ -12,6 +12,7 @@ Description: This script sets up a secret and external access integration to all
 2025-07-10   | J. Ma         | Added option for AWS application ID authentication
 2025-07-25   | J. Ma         | Updated sample policy for Glue access
 2025-08-08   | J. Ma         | Added sample IAM policy for create database in glue and run query in athena
+2025-08-12   | J. Ma         | Hide my AWS account ID in the sample IAM policy
 ===============================================
 */
 
@@ -67,10 +68,10 @@ CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION aws_glue_access_int
 				"glue:GetDatabase"
 			],
 			"Resource": [
-				"arn:aws:glue:us-west-2:087354435437:catalog",
-        "arn:aws:glue:us-west-2:087354435437:catalog/*",
-				"arn:aws:glue:us-west-2:087354435437:table/<my athena database>/*",
-				"arn:aws:glue:us-west-2:087354435437:database/<my athena database>"
+				"arn:aws:glue:us-west-2:084726193845:catalog",
+        "arn:aws:glue:us-west-2:084726193845:catalog/*",
+				"arn:aws:glue:us-west-2:084726193845:table/<my athena database>/*",
+				"arn:aws:glue:us-west-2:084726193845:database/<my athena database>"
 			]
 		}
 	]
@@ -140,9 +141,9 @@ Alter EXTERNAL ACCESS INTEGRATION aws_glue_access_int
                 "glue:GetDatabases"
             ],
             "Resource": [
-                "arn:aws:glue:us-west-2:087354435437:catalog",
-                "arn:aws:glue:us-west-2:087354435437:database/*",
-                "arn:aws:glue:us-west-2:087354435437:table/*/*"
+                "arn:aws:glue:us-west-2:084726193845:catalog",
+                "arn:aws:glue:us-west-2:084726193845:database/*",
+                "arn:aws:glue:us-west-2:084726193845:table/*/*"
             ]
         },
         {
@@ -154,7 +155,7 @@ Alter EXTERNAL ACCESS INTEGRATION aws_glue_access_int
                 "athena:GetQueryExecution",
                 "athena:GetQueryResults"
             ],
-            "Resource": "arn:aws:athena:us-west-2:087354435437:workgroup/primary"
+            "Resource": "arn:aws:athena:us-west-2:084726193845:workgroup/primary"
         },
         {
             "Sid": "S3Permissions",
