@@ -106,3 +106,83 @@ EXCEPTION
 
 end;
 $$; 
+
+
+/* ==============================================
+  File: update_glue_metadata_location_4_list_tables.sql
+  Description:  This script leverages a driving table to run update_glue_metadata_location for all the tables marked as 'Y'.
+                The include_flag is set to 'N' for its metadata is sync.  This can be a different driving table than the one used for above proc.  
+                To create the procedure, do the following: 
+                - If the driving table is named different, update the table name in the script accordingly.
+                - Change iceberg_db to your db name, testsc to your schema name. 
+                - Replace update_glue_metadata_location with the your procedure name if it is named differently.
+                - It is assumed that update_glue_metadata_location is in the same database and schema as the procedure as this proc.  Adjust if necessary.
+                
+Sample Call:
+ -----------------------------------------------
+call update_glue_metadata_location_4_list_tables();
+----------------------------------------------- 
+ ===============================================
+ Change History
+===============================================
+ Date        | Author        | Description
+-------------|---------------|------------------------------------------------------
+2025-08-14   | J. Ma         | Created
+===============================================
+*/
+
+CREATE OR REPLACE PROCEDURE iceberg_db.testsc.update_glue_metadata_location_4_list_tables()
+RETURNS VARCHAR
+LANGUAGE SQL
+AS
+$$
+ declare
+    rs RESULTSET default (select snow_db_name, snow_schema_name, 
+                            snow_table_name, athena_db_name, athena_table_name, task_schedule_minutes 
+                            from iceberg_db.testsc.iceberg_table_list where include_flag = 'Y');
+    vw1_cur CURSOR for rs;
+    my_sql varchar;
+    stream_name varchar;
+    task_name varchar ;
+    lcnt number default 0;
+    V_PROC_NAME VARCHAR(255) DEFAULT 'update_glue_metadata_location_4_list_tables';
+begin
+    for vw1 in vw1_cur do
+       lcnt := lcnt + 1;
+
+       my_sql :=  '
+                call iceberg_db.testsc.update_glue_metadata_location('''||vw1.athena_db_name||''', 
+                '''||vw1.athena_table_name||''',  
+                get_ddl(''table'', '''||vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'||vw1.snow_table_name||'''),                
+                    CAST(GET(PARSE_JSON(SYSTEM$GET_ICEBERG_TABLE_INFORMATION('''||vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'||vw1.snow_table_name||''')), ''metadataLocation'') AS VARCHAR),
+                    null)
+        ';
+
+       begin 
+         execute immediate :my_sql;
+       exception
+         when other then
+            SYSTEM$LOG_ERROR('PROCEDURE ' || :V_PROC_NAME || ' failed for table '||vw1.snow_db_name||'.'||vw1.snow_schema_name||'.'||vw1.snow_table_name||'.  Error: ' || SQLERRM);
+          raise;
+       end;
+
+        my_sql := 'UPDATE iceberg_db.testsc.iceberg_table_list SET include_flag = ''N'' WHERE snow_db_name = '''||vw1.snow_db_name||''' AND snow_schema_name = '''||vw1.snow_schema_name||''' AND snow_table_name = '''||vw1.snow_table_name||''';';
+        execute immediate :my_sql;
+       
+    end for;
+    
+    SYSTEM$LOG_INFO('PROCEDURE ' || :V_PROC_NAME || ' completed successfully. Total records processed: ' || :lcnt);
+    return 'Success. Number of records processed: '||:lcnt;
+    
+EXCEPTION
+    WHEN OTHER THEN
+        SYSTEM$LOG_ERROR(
+            'PROCEDURE ' || :V_PROC_NAME || ' failed. ' ||
+            'Error Code: ' || SQLCODE || '. ' ||
+            'Error Message: ' || SQLERRM 
+        );
+
+    RETURN 'Error recording log event: ' || SQLERRM;
+
+end;
+$$; 
