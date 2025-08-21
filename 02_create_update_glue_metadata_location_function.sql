@@ -38,7 +38,7 @@ Description:  These procedures update the metadata location of an Iceberg table 
 2025-08-07   | J. Ma         | Propagate error msg from  individual functions to the main procedure return message.     
              |               | Added logic to check if database exists, if not, create it,  before creating or updating the table.
 2025-08-13   | J. Ma         | For column type mapping between snowflake and glue, change number map to double.  Add logic to keep precisions
-2025-08-14   | J. Ma         | Make stream to clear as an option. standardize logging and error msg
+2025-08-14   | J. Ma         | Make stream clear as an option. standardize logging and error msg
 ===============================================
 */
 
