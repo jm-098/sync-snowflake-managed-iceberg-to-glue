@@ -39,6 +39,7 @@ Description:  These procedures update the metadata location of an Iceberg table 
              |               | Added logic to check if database exists, if not, create it,  before creating or updating the table.
 2025-08-13   | J. Ma         | For column type mapping between snowflake and glue, change number map to double.  Add logic to keep precisions
 2025-08-14   | J. Ma         | Make stream clear as an option. standardize logging and error msg
+2025-08-25   | J. Ma         | fix table reference in check table exist exception
 ===============================================
 */
 
