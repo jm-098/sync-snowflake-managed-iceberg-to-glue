@@ -148,7 +148,7 @@ def check_table_exists(athena_database_name, athena_table_name):
         if e.response['Error']['Code'] == 'EntityNotFoundException':
             return False  # Table does not exist
         else:
-            log_exception(e, f"Sth wrong when checking if {table_name} exists in athena. ")
+            log_exception(e, f"Sth wrong when checking if {athena_table_name} exists in athena. ")
     except Exception as e:
         log_exception(e, "An unhandled exception occurred in check_table_exists.")
         raise Exception (f"An unhandled exception occurred in check_table_exists. Error: {e}")
