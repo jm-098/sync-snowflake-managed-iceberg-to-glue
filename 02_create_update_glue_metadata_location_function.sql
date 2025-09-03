@@ -40,6 +40,7 @@ Description:  These procedures update the metadata location of an Iceberg table 
 2025-08-13   | J. Ma         | For column type mapping between snowflake and glue, change number map to double.  Add logic to keep precisions
 2025-08-14   | J. Ma         | Make stream clear as an option. standardize logging and error msg
 2025-08-25   | J. Ma         | fix table reference in check table exist exception
+2025-09-03   | J. Ma         | strip not null constraints from columns
 ===============================================
 */
 
@@ -264,10 +265,13 @@ def parse_columns_to_glue_format(table_ddl: str) -> list:
             continue
 
         col_name = parts[0].strip()
-        raw_col_type = parts[1].strip().lower().replace(' ', '')
+        raw_col_type = ' '.join(parts[1:]).strip().lower()
+        
+        # Remove "not null" from the type string before processing
+        raw_col_type = raw_col_type.replace('not null', '').strip()
 
-        # Handle decimal, number, numeric types with precision
-        number_match = re.match(r'^(number|decimal|numeric)\((\d+),(\d+)\)$', raw_col_type)
+        # Handle decimal, number, numeric types with precision, now more robust to spacing
+        number_match = re.match(r'^(number|decimal|numeric)\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)$', raw_col_type)
         if number_match:
             _, precision, scale = number_match.groups()
             glue_type = f"decimal({precision},{scale})"

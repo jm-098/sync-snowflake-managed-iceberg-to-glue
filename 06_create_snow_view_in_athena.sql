@@ -63,7 +63,7 @@ Description:  This procedure creates views in athena from snowflake views.
  -----------------------------------------------
  -- Update glue-athena table with snowflake iceberg table data and structure change: 
  CALL sync_views_to_athena(
-     get_ddl('table', 'my_snow_db.my_snow_schema.my_snow_iceberg_table'),
+     get_ddl('view', 'my_snow_db.my_snow_schema.jtmpv_2'),
      'my_athena_database' , 
      'my_athena_output_location' 
  );
